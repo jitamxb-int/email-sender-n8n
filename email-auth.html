@@ -29,6 +29,18 @@
             width: 100%;
             padding: 48px;
             text-align: center;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .logo {
@@ -70,6 +82,7 @@
             margin-bottom: 16px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            font-weight: 600;
         }
         
         .permission-item {
@@ -109,15 +122,17 @@
             align-items: center;
             justify-content: center;
             gap: 12px;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
         
         .connect-button:hover {
             background: #3367d6;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(66, 133, 244, 0.3);
         }
         
         .connect-button:active {
-            transform: scale(0.98);
+            transform: translateY(0);
         }
         
         .google-icon {
@@ -130,17 +145,31 @@
             padding: 16px;
             border-radius: 8px;
             display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .status.success {
             background: #c6f6d5;
             color: #22543d;
+            border: 1px solid #9ae6b4;
             display: block;
         }
         
         .status.error {
             background: #fed7d7;
             color: #742a2a;
+            border: 1px solid #fc8181;
             display: block;
         }
         
@@ -148,6 +177,19 @@
             margin-top: 32px;
             font-size: 12px;
             color: #a0aec0;
+            line-height: 1.5;
+        }
+        
+        .security-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #edf2f7;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #4a5568;
+            margin-top: 16px;
         }
     </style>
 </head>
@@ -156,13 +198,13 @@
         <div class="logo">📧</div>
         
         <h1>Connect Your Email</h1>
-        <p>Allow Sales Lead Tracker to monitor your inbox for new sales leads and automatically process them.</p>
+        <p>Allow Sales Lead Tracker to monitor your inbox for new sales leads and automatically process them with AI.</p>
         
         <div class="permissions">
             <h3>This app will be able to:</h3>
             <div class="permission-item">
                 <span class="check-icon">✓</span>
-                <span class="permission-text">Read emails when they arrive in your inbox</span>
+                <span class="permission-text">Read new emails when they arrive in your inbox</span>
             </div>
             <div class="permission-item">
                 <span class="check-icon">✓</span>
@@ -170,7 +212,7 @@
             </div>
             <div class="permission-item">
                 <span class="check-icon">✓</span>
-                <span class="permission-text">Monitor inbox for new sales leads</span>
+                <span class="permission-text">Analyze emails for sales lead information</span>
             </div>
         </div>
         
@@ -187,7 +229,10 @@
         <div id="status" class="status"></div>
         
         <div class="footer">
-            Your data is secure. We only access emails you explicitly grant permission to.
+            <div>🔒 Your data is secure. We only access emails with your explicit permission.</div>
+            <div class="security-badge">
+                🛡️ Encrypted & GDPR Compliant
+            </div>
         </div>
     </div>
     
@@ -212,28 +257,50 @@
             authUrl.searchParams.append('client_id', CONFIG.clientId);
             authUrl.searchParams.append('redirect_uri', CONFIG.redirectUri);
             authUrl.searchParams.append('response_type', 'code');
-            authUrl.searchParams.append('scope', CONFIG.scope);
+            authUrl.searchParams.append('scope', CONFIG.scopes.join(' '));
             authUrl.searchParams.append('access_type', 'offline');
             authUrl.searchParams.append('prompt', 'consent');
+            authUrl.searchParams.append('state', generateState());
+            
+            // Store state for verification
+            sessionStorage.setItem('oauth_state', authUrl.searchParams.get('state'));
             
             // Redirect to Google OAuth
             window.location.href = authUrl.toString();
         }
         
+        // Generate random state for CSRF protection
+        function generateState() {
+            return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+        
         // Check for success/error in URL params (after redirect back)
         window.addEventListener('load', function() {
             const params = new URLSearchParams(window.location.search);
-            const code = params.get('code');
+            const success = params.get('success');
             const error = params.get('error');
+            const email = params.get('email');
             
             const statusDiv = document.getElementById('status');
             
-            if (code) {
+            if (success === 'true') {
                 statusDiv.className = 'status success';
-                statusDiv.textContent = '✓ Successfully connected! Your email is now being monitored for sales leads.';
+                statusDiv.innerHTML = `
+                    <strong>✓ Successfully connected!</strong><br>
+                    ${email ? `Email: ${email}<br>` : ''}
+                    Your inbox is now being monitored for sales leads.
+                `;
+                
+                // Clear URL parameters after 3 seconds
+                setTimeout(() => {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }, 3000);
             } else if (error) {
                 statusDiv.className = 'status error';
-                statusDiv.textContent = '✗ Connection failed: ' + error;
+                statusDiv.innerHTML = `
+                    <strong>✗ Connection failed</strong><br>
+                    ${decodeURIComponent(error)}
+                `;
             }
         });
     </script>

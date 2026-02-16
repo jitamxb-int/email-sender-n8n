@@ -3,8 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Processing...</title>
+    <title>Processing Authentication...</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -17,14 +23,18 @@
             padding: 20px;
         }
         
+        .container {
+            max-width: 500px;
+        }
+        
         .loader {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(255, 255, 255, 0.3);
+            width: 60px;
+            height: 60px;
+            border: 6px solid rgba(255, 255, 255, 0.3);
             border-top-color: white;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 24px;
+            margin: 0 auto 32px;
         }
         
         @keyframes spin {
@@ -32,19 +42,112 @@
         }
         
         h2 {
-            margin-bottom: 12px;
+            margin-bottom: 16px;
+            font-size: 28px;
+            font-weight: 600;
         }
         
         p {
             opacity: 0.9;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .error-details {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 24px;
+            font-size: 14px;
+            text-align: left;
+            max-width: 500px;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+        
+        .error-details.show {
+            display: block;
+        }
+        
+        .error-details strong {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        
+        .error-details code {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        
+        .progress-steps {
+            margin-top: 32px;
+            text-align: left;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+        
+        .step.active {
+            opacity: 1;
+        }
+        
+        .step.complete {
+            opacity: 1;
+        }
+        
+        .step-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .step.complete .step-number {
+            background: #48bb78;
         }
     </style>
 </head>
 <body>
-    <div>
-        <div class="loader"></div>
-        <h2>Connecting your email...</h2>
-        <p id="message">Please wait while we set up your account.</p>
+    <div class="container">
+        <div class="loader" id="loader"></div>
+        <h2 id="title">Connecting your email...</h2>
+        <p id="message">Please wait while we securely set up your account.</p>
+        
+        <div class="progress-steps" id="progress">
+            <div class="step" id="step1">
+                <div class="step-number">1</div>
+                <span>Receiving authorization</span>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-number">2</div>
+                <span>Exchanging tokens</span>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-number">3</div>
+                <span>Storing credentials</span>
+            </div>
+            <div class="step" id="step4">
+                <div class="step-number">4</div>
+                <span>Finalizing setup</span>
+            </div>
+        </div>
+        
+        <div id="error-details" class="error-details"></div>
     </div>
     
     <script>
@@ -53,38 +156,135 @@
         // ========================================
         const N8N_WEBHOOK_URL = 'https://jitamint.app.n8n.cloud/webhook-test/email-auth';
         
-        // Get the authorization code from URL
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        const error = params.get('error');
-        
-        if (error) {
-            document.getElementById('message').textContent = 'Authorization failed: ' + error;
-        } else if (code) {
-            // Send the code to your n8n webhook
-            fetch(N8N_WEBHOOK_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    code: code,
-                    timestamp: new Date().toISOString()
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById('message').textContent = 'Success! Redirecting...';
-                setTimeout(() => {
-                    window.location.href = 'email-auth.html?success=true';
-                }, 2000);
-            })
-            .catch(err => {
-                document.getElementById('message').textContent = 'Error: ' + err.message;
-            });
-        } else {
-            document.getElementById('message').textContent = 'No authorization code received.';
+        // Helper function to update progress
+        function updateStep(stepNumber, status = 'active') {
+            const step = document.getElementById(`step${stepNumber}`);
+            if (step) {
+                if (status === 'complete') {
+                    step.classList.add('complete');
+                    step.classList.remove('active');
+                } else {
+                    step.classList.add('active');
+                }
+            }
         }
+        
+        // Helper function to show error
+        function showError(title, message, details = null) {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('title').textContent = title;
+            document.getElementById('message').textContent = message;
+            document.getElementById('progress').style.display = 'none';
+            
+            if (details) {
+                const errorDiv = document.getElementById('error-details');
+                errorDiv.innerHTML = `
+                    <strong>Error Details:</strong><br>
+                    ${details}
+                `;
+                errorDiv.classList.add('show');
+            }
+        }
+        
+        // Main authentication flow
+        async function processAuthentication() {
+            // Step 1: Get authorization code from URL
+            updateStep(1, 'active');
+            
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
+            const error = params.get('error');
+            const state = params.get('state');
+            
+            // Check for errors
+            if (error) {
+                showError(
+                    'Authorization Failed',
+                    'Google denied the authorization request.',
+                    `Error: ${error}<br>Please try again or contact support.`
+                );
+                return;
+            }
+            
+            if (!code) {
+                showError(
+                    'No Authorization Code',
+                    'No authorization code was received from Google.',
+                    'Please try the connection process again.'
+                );
+                return;
+            }
+            
+            updateStep(1, 'complete');
+            
+            // Step 2: Send code to n8n webhook
+            updateStep(2, 'active');
+            
+            try {
+                const response = await fetch(N8N_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        code: code,
+                        state: state,
+                        timestamp: new Date().toISOString(),
+                        redirect_uri: window.location.origin + window.location.pathname
+                    })
+                });
+                
+                updateStep(2, 'complete');
+                updateStep(3, 'active');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                updateStep(3, 'complete');
+                updateStep(4, 'active');
+                
+                if (data.success) {
+                    // Success!
+                    updateStep(4, 'complete');
+                    
+                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('title').textContent = 'Success!';
+                    document.getElementById('message').textContent = 'Your email has been connected successfully.';
+                    
+                    // Redirect back to main page with success message
+                    setTimeout(() => {
+                        const email = data.email || '';
+                        window.location.href = `email-auth.html?success=true&email=${encodeURIComponent(email)}`;
+                    }, 2000);
+                } else {
+                    throw new Error(data.message || 'Unknown error occurred');
+                }
+                
+            } catch (err) {
+                showError(
+                    'Connection Error',
+                    'Failed to connect your email to the system.',
+                    `
+                        <strong>Error Message:</strong><br>
+                        ${err.message}<br><br>
+                        <strong>Webhook URL:</strong><br>
+                        <code>${N8N_WEBHOOK_URL}</code><br><br>
+                        <strong>Troubleshooting Steps:</strong><br>
+                        1. Check if your n8n workflow is Active<br>
+                        2. Verify the webhook URL is correct<br>
+                        3. Check n8n execution logs<br>
+                        4. Ensure CORS headers are configured<br><br>
+                        <a href="email-auth.html" style="color: white; text-decoration: underline;">← Go back and try again</a>
+                    `
+                );
+            }
+        }
+        
+        // Run on page load
+        window.addEventListener('load', processAuthentication);
     </script>
 </body>
 </html>
