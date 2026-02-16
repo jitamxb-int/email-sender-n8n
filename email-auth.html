@@ -198,7 +198,11 @@
         const CONFIG = {
             clientId: '1096936503987-apghpou7och8kjue7hrdhdc2322tvmqa.apps.googleusercontent.com',
             redirectUri: 'https://email-sender-n8n.vercel.app/callback.html', // Change this to your hosted URL
-            scope: 'https://www.googleapis.com/auth/gmail.readonly'
+            scopes: [
+                'https://www.googleapis.com/auth/gmail.readonly',
+                'https://www.googleapis.com/auth/userinfo.email',
+                'https://www.googleapis.com/auth/userinfo.profile'
+            ]
         };
         
         function connectGmail() {
